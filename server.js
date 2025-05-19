@@ -13,7 +13,7 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
-
+  
 io.on("connection", (socket) => {
   console.log("클라이언트가 연결되었습니다.");
 

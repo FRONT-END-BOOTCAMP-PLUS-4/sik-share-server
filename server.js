@@ -4,7 +4,6 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-
 const PORT = process.env.PORT || 3001;
 
 const io = new Server(server, {
@@ -13,20 +12,31 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
-  
-io.on("connection", (socket) => {
-  console.log("클라이언트가 연결되었습니다.");
 
-  socket.on("chat message", (msg) => {
-    console.log("수신된 메시지:", msg);
-    io.emit("메세지", msg);
+io.on("connection", (socket) => {
+  console.log("🔌 클라이언트가 연결되었습니다.");
+
+  socket.on("joinRoom", (roomId) => {
+    socket.join(roomId);
+    console.log(`🟢 ${socket.id}가 방 ${roomId}에 입장`);
+  });
+
+  socket.on("message", ({ roomId, ...message }) => {
+    console.log(`📨 방 ${roomId}로부터 메시지 수신:`, message);
+
+    io.to(roomId).emit("message", message);
+  });
+
+  socket.on("leaveRoom", (roomId) => {
+    socket.leave(roomId);
+    console.log(`🔴 ${socket.id}가 방 ${roomId}에서 퇴장`);
   });
 
   socket.on("disconnect", () => {
-    console.log("클라이언트 연결이 끊어졌습니다.");
+    console.log("❌ 클라이언트 연결 해제");
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`서버가 ${PORT}번 포트에서 실행 중입니다.`);
+  console.log(`🚀 서버가 ${PORT}번 포트에서 실행 중입니다.`);
 });

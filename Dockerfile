@@ -11,4 +11,4 @@ COPY . .
 
 RUN npx prisma generate
 
-CMD ["node", "server.js"]
+CMD npx prisma generate && node server.js

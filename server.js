@@ -34,7 +34,7 @@ io.on("connection", (socket) => {
     const savedMessage = await prisma.shareChatMessage.create({
       data: {
         senderId,
-        shareChatId: chatId,
+        shareChatId: Number(chatId),
         content
       },
       include: {

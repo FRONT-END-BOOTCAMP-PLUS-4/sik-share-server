@@ -34,13 +34,13 @@ io.on("connection", (socket) => {
     const savedMessage = await prisma.shareChatMessage.create({
       data: {
         senderId,
-        shareChatId: Number(chatId),
+        shareChatId: parseInt(chatId),
         content
-      },
-      include: {
-        sender: true
-      }
-    });
+  },
+  include: {
+    sender: true,
+  }
+});
 
     io.to(chatId).emit("chat message", savedMessage);
   });

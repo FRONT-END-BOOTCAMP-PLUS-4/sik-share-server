@@ -16,20 +16,20 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("🔌 클라이언트가 연결되었습니다.");
 
-  socket.on("joinRoom", (roomId) => {
-    socket.join(roomId);
-    console.log(`🟢 ${socket.id}가 방 ${roomId}에 입장`);
+  socket.on("joinRoom", (chatId) => {
+    socket.join(chatId);
+    console.log(`🟢 ${socket.id}가 방 ${chatId}에 입장`);
   });
 
-  socket.on("message", ({ roomId, ...message }) => {
-    console.log(`📨 방 ${roomId}로부터 메시지 수신:`, message);
+  socket.on("message", ({ chatId, ...message }) => {
+    console.log(`📨 방 ${chatId}로부터 메시지 수신:`, message);
 
-    io.to(roomId).emit("message", message);
+    io.to(chatId).emit("message", message);
   });
 
-  socket.on("leaveRoom", (roomId) => {
-    socket.leave(roomId);
-    console.log(`🔴 ${socket.id}가 방 ${roomId}에서 퇴장`);
+  socket.on("leaveRoom", (chatId) => {
+    socket.leave(chatId);
+    console.log(`🔴 ${socket.id}가 방 ${chatId}에서 퇴장`);
   });
 
   socket.on("disconnect", () => {

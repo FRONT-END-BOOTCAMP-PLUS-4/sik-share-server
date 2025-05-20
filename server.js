@@ -21,10 +21,10 @@ io.on("connection", (socket) => {
     console.log(`🟢 ${socket.id}가 방 ${chatId}에 입장`);
   });
 
-  socket.on("message", ({ chatId, ...message }) => {
+  socket.on("chat message", ({ chatId, ...message }) => {
     console.log(`📨 방 ${chatId}로부터 메시지 수신:`, message);
 
-    io.to(chatId).emit("message", message);
+    io.to(chatId).emit("chat message", message);
   });
 
   socket.on("leaveRoom", (chatId) => {

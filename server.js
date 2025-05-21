@@ -36,7 +36,7 @@ io.on("connection", (socket) => {
       data: {
         senderId,
         shareChatId: parseInt(chatId),
-        content
+        content,
   },
   include: {
     sender: true,

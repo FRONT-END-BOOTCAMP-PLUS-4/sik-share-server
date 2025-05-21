@@ -38,6 +38,7 @@ io.on("connection", (socket) => {
         readCount: { decrement: 1 }
       },
     });
+     console.log(`[joinRoom] readCount 업데이트 개수:`, updateResult.count);
   }); 
 
   socket.on("chat message", async ({ chatId, senderId, content }) => {

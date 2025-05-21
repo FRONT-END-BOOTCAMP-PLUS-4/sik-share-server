@@ -29,7 +29,7 @@ io.on("connection", (socket) => {
     console.log(`🟢 ${socket.id}가 방 ${chatId}에 입장 (유저: ${userId})`);
 
     // 입장 시, 기존 안읽은 메시지 readCount를 0으로!
-    const updateResult = await prisma.shareChatMessage.updateMany({
+    await prisma.shareChatMessage.updateMany({
       where: {
         shareChatId: parseInt(chatId),
         senderId: { not: userId },
@@ -39,7 +39,20 @@ io.on("connection", (socket) => {
         readCount: 0,
       },
     });
-    console.log(`[joinRoom] readCount 업데이트 개수:`, updateResult.count);
+
+    // 이제 readCount가 0이 된 메시지 id만 다시 불러와서 본인에게만 emit!
+    const readMessages = await prisma.shareChatMessage.findMany({
+      where: {
+        shareChatId: parseInt(chatId),
+        senderId: { not: userId },
+        readCount: 0,
+      },
+      select: { id: true }
+    });
+    const readIds = readMessages.map(msg => msg.id);
+    // emit to current socket (본인에게만 보냄)
+    socket.emit("messagesRead", { readIds });
+    console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, readIds);
   });
 
   // ✅ 메시지 수신 및 실시간 읽음처리
@@ -61,6 +74,7 @@ io.on("connection", (socket) => {
 
     const socketsInRoom = await io.in(chatId).fetchSockets();
 
+    // 채팅방에 나 말고 누가 있으면(=상대방 접속중) 바로 읽음처리
     const isOtherUserInRoom = socketsInRoom.some(s => s.id !== socket.id);
     if (isOtherUserInRoom) {
       await prisma.shareChatMessage.update({

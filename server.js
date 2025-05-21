@@ -50,6 +50,9 @@ io.on("connection", (socket) => {
     io.to(chatId).emit("chat message", savedMessage);
   });
 
+
+  console.log(typeof(chatId), "메세지 보낸 후 서버에서 주는 채팅 아이디 타입");
+
   socket.on("leaveRoom", (chatId) => {
     socket.leave(chatId);
     console.log(`🔴 ${socket.id}가 방 ${chatId}에서 퇴장`);

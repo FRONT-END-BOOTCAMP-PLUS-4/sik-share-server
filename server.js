@@ -42,6 +42,11 @@ io.on("connection", (socket) => {
   }
 });
 
+ console.log(
+    `[emit] 방 ${chatId}에 메시지 발송:`,
+    JSON.stringify(savedMessage, null, 2)
+  );
+
     io.to(chatId).emit("chat message", savedMessage);
   });
 

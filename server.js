@@ -23,10 +23,12 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("📡 클라이언트 연결됨");
 
+  // ✅ joinRoom: chatId, userId 같이 받음!
   socket.on("joinRoom", async ({ chatId, userId }) => {
     socket.join(chatId);
     console.log(`🟢 ${socket.id}가 방 ${chatId}에 입장 (유저: ${userId})`);
 
+    // 입장 시, 기존 안읽은 메시지 readCount를 0으로!
     const updateResult = await prisma.shareChatMessage.updateMany({
       where: {
         shareChatId: parseInt(chatId),
@@ -40,24 +42,34 @@ io.on("connection", (socket) => {
     console.log(`[joinRoom] readCount 업데이트 개수:`, updateResult.count);
   });
 
+  // ✅ 메시지 수신 및 실시간 읽음처리
   socket.on("chat message", async ({ chatId, senderId, content }) => {
     console.log(`✉️ 방 ${chatId} 메시지 수신: ${content}`);
 
-    const savedMessage = await prisma.shareChatMessage.create({
+    // 메시지 저장
+    let savedMessage = await prisma.shareChatMessage.create({
       data: {
         senderId,
         shareChatId: parseInt(chatId),
         content,
+        readCount: 1, // 1: 안읽음
       },
       include: {
         sender: true,
       }
     });
 
-    console.log(
-      `[emit] 방 ${chatId}에 메시지 발송:`,
-      JSON.stringify(savedMessage, null, 2)
-    );
+    const socketsInRoom = await io.in(chatId).fetchSockets();
+
+    const isOtherUserInRoom = socketsInRoom.some(s => s.id !== socket.id);
+    if (isOtherUserInRoom) {
+      await prisma.shareChatMessage.update({
+        where: { id: savedMessage.id },
+        data: { readCount: 0 }
+      });
+      savedMessage.readCount = 0;
+    }
+
     io.to(chatId).emit("chat message", savedMessage);
   });
 

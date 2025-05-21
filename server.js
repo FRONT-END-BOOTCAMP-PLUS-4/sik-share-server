@@ -26,6 +26,7 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", (chatId) => {
     socket.join(chatId);
     console.log(`🟢 ${socket.id}가 방 ${chatId}에 입장`);
+    console.log(typeof(chatId), "연결 됐을 때 서버에서 주는 채팅 아이디 타입");
   });
 
   socket.on("chat message", async ({ chatId, senderId, content }) => {
@@ -46,7 +47,6 @@ io.on("connection", (socket) => {
     `[emit] 방 ${chatId}에 메시지 발송:`,
     JSON.stringify(savedMessage, null, 2)
   );
-
     io.to(chatId).emit("chat message", savedMessage);
   });
 

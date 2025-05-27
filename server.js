@@ -143,7 +143,7 @@ io.on("connection", (socket) => {
     userSocketMap[userId] = socket.id;
     console.log(`🟢 ${socket.id}가 단체 방 ${chatId}에 입장 (유저: ${userId})`);
 
-    // 1. 안읽은 메시지 모두 찾기 (내가 안읽은)
+    // 1. 내가 안읽은 메시지들 찾기
     const unreadMessages = await prisma.groupBuyChatMessage.findMany({
       where: {
         groupBuyChatId: parseInt(chatId),
@@ -153,26 +153,30 @@ io.on("connection", (socket) => {
       select: { id: true },
     });
 
+    // 2. 읽음 처리 + count -1
     await Promise.all(
-      unreadMessages.map((msg) =>
-        prisma.groupBuyChatMessageRead
+      unreadMessages.map(async (msg) => {
+        await prisma.groupBuyChatMessageRead
           .create({ data: { messageId: msg.id, userId } })
-          .catch(() => {})
-      )
+          .catch(() => {});
+        await prisma.groupBuyChatMessage.update({
+          where: { id: msg.id },
+          data: { count: { decrement: 1 } }, // 💙 count -1
+        });
+      })
     );
     const unreadIds = unreadMessages.map((msg) => msg.id);
 
-    // 2. 읽음 처리된 메시지 id를 방 내 유저들에게 알림
+    // 3. 읽음 처리된 메시지 id를 방 내 유저들에게 알림
     io.to(chatId).emit("messagesRead", { readIds: unreadIds });
 
-    // 3. 목록방에 있는 다른 참여자들에게 unreadCount=0, lastMessage, lastMessageAt 등 알림
+    // 4. 목록방에 있는 다른 참여자들에게 unreadCount=0 등 알림
     const groupChat = await prisma.groupBuyChat.findUnique({
       where: { id: parseInt(chatId) },
       include: { participants: true },
     });
     for (const participant of groupChat.participants) {
       if (participant.userId !== userId) {
-        // 💙 반드시 groupBuyChatListUpdate로 emit!!
         io.to("chatList:" + participant.userId).emit("groupBuyChatListUpdate", {
           chatId: Number(chatId),
           unreadCount: 0,
@@ -185,24 +189,28 @@ io.on("connection", (socket) => {
   socket.on("groupbuy chat message", async ({ chatId, senderId, content }) => {
     console.log(`✉️ [단체] 방 ${chatId} 메시지: ${content}`);
 
+    // 참여자 수 구해서 count 초기값 설정 (본인 제외)
+    const groupChat = await prisma.groupBuyChat.findUnique({
+      where: { id: parseInt(chatId) },
+      include: { participants: true },
+    });
+    const memberCount = groupChat.participants.length;
+    const initialCount = Math.max(0, memberCount - 1);
+
+    // 메시지 저장: count = 참여자수 - 1
     let savedMessage = await prisma.groupBuyChatMessage.create({
       data: {
         senderId,
         groupBuyChatId: parseInt(chatId),
         content,
-        count: 1,
+        count: initialCount,
       },
       include: { sender: true },
     });
 
-    // (선택: 읽음처리 로직은 방입장할 때만)
     io.to(chatId).emit("groupbuy chat message", savedMessage);
 
     // ✅ 모든 참여자에게 목록 갱신 emit (lastMessage, unreadCount 등)
-    const groupChat = await prisma.groupBuyChat.findUnique({
-      where: { id: parseInt(chatId) },
-      include: { participants: true },
-    });
     for (const participant of groupChat.participants) {
       // 해당 유저의 안읽음 개수
       const unreadCount = await prisma.groupBuyChatMessage.count({
@@ -212,13 +220,13 @@ io.on("connection", (socket) => {
           GroupBuyChatMessageRead: { none: { userId: participant.userId } },
         },
       });
-      // 💙 반드시 groupBuyChatListUpdate로 emit!!
       io.to("chatList:" + participant.userId).emit("groupBuyChatListUpdate", {
         chatId: Number(chatId),
         unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
         type: "together",
+        count: initialCount, // 💙 프론트에서 쓸 경우 count도 전달
       });
     }
   });

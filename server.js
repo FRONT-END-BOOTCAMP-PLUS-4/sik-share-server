@@ -39,7 +39,7 @@ io.on("connection", (socket) => {
       where: {
         shareChatId: parseInt(chatId),
         senderId: { not: userId },
-        ShareChatMessageReads: { none: { userId } },
+        ShareChatMessageRead: { none: { userId } },
       },
       select: { id: true }
     });

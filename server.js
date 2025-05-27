@@ -145,9 +145,11 @@ io.on("connection", (socket) => {
           readCount: 1,
         },
       });
-      io.to("chatList:" + other.userId).emit("chatListUpdate", {
+      io.to("chatList:" + otherUserId).emit("chatListUpdate", {
         chatId: Number(chatId),
-        unreadCount,
+        unreadCount: 1,
+        lastMessage: savedMessage.content,
+        lastMessageAt: savedMessage.createdAt,
       });
     }
   });

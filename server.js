@@ -51,10 +51,18 @@ io.on("connection", (socket) => {
       }).catch(() => {}) // 중복 row 에러 무시
     ));
 
+    // 🔥 추가된 부분: unreadMessages의 id 목록을 받아 readCount = 0으로 일괄 업데이트
+    const unreadIds = unreadMessages.map(msg => msg.id);
+    if (unreadIds.length > 0) {
+      await prisma.shareChatMessage.updateMany({
+        where: { id: { in: unreadIds } },
+        data: { readCount: 0 },
+      });
+    }
+
     // 읽음 처리된 메시지 id만 보내줌
-    const readIds = unreadMessages.map(msg => msg.id);
-    socket.emit("messagesRead", { readIds });
-    console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, readIds);
+    socket.emit("messagesRead", { readIds: unreadIds });
+    console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, unreadIds);
   });
 
   socket.on("chat message", async ({ chatId, senderId, content }) => {
@@ -84,6 +92,14 @@ io.on("connection", (socket) => {
       await prisma.shareChatMessageRead.create({
         data: { messageId: savedMessage.id, userId: otherUserId }
       }).catch(() => {});
+
+      // 🔥 바로 DB readCount도 0으로 변경 (실시간 반영)
+      await prisma.shareChatMessage.update({
+        where: { id: savedMessage.id },
+        data: { readCount: 0 }
+      });
+      // (참고: savedMessage.readCount를 프론트로 바로 내려주려면 아래처럼 반영)
+      savedMessage.readCount = 0;
     }
 
     io.to(chatId).emit("chat message", savedMessage);
@@ -143,5 +159,5 @@ io.on("connection", (socket) => {
 
 // 서버 실행
 server.listen(PORT, () => {
-  console.log(`🚀 서버가 http://localhost:${PORT}에서 실행 중`);
+  console.log(`🚀 서버가 ${PORT}에서 실행 중`);
 });

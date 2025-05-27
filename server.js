@@ -39,7 +39,7 @@ io.on("connection", (socket) => {
       where: {
         shareChatId: parseInt(chatId),
         senderId: { not: userId },
-        shareChatMessageReads: { none: { userId } },
+        ShareChatMessageReads: { none: { userId } },
       },
       select: { id: true }
     });
@@ -81,7 +81,7 @@ io.on("connection", (socket) => {
 
     if (otherUserId) {
       // 읽음 row 생성 (중복 에러 무시)
-      await prisma.ShareChatMessageRead.create({
+      await prisma.shareChatMessageRead.create({
         data: { messageId: savedMessage.id, userId: otherUserId }
       }).catch(() => {});
     }

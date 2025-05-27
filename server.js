@@ -16,8 +16,8 @@ const PORT = process.env.PORT || 3001;
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+  },
 });
 
 // 소켓ID ↔ 유저ID 매핑 (in-memory, 재시작시 초기화됨)
@@ -26,6 +26,14 @@ const userSocketMap = {};
 
 io.on("connection", (socket) => {
   console.log("📡 클라이언트 연결됨");
+
+  // ✅ 1. 채팅 목록 구독 (채팅 목록 페이지에서)
+  socket.on("subscribeChatList", ({ userId }) => {
+    socket.join("chatList:" + userId);
+    socketUserMap[socket.id] = userId;
+    userSocketMap[userId] = socket.id;
+    console.log(`🟢 ${socket.id}가 chatList:${userId} 구독`);
+  });
 
   // ====== 1:1 채팅 (share) ======
   socket.on("joinRoom", async ({ chatId, userId }) => {
@@ -45,14 +53,18 @@ io.on("connection", (socket) => {
     });
 
     // 해당 메시지 읽음 row 생성
-    await Promise.all(unreadMessages.map(msg =>
-      prisma.shareChatMessageRead.create({
-        data: { messageId: msg.id, userId }
-      }).catch(() => {}) // 중복 row 에러 무시
-    ));
+    await Promise.all(
+      unreadMessages.map((msg) =>
+        prisma.shareChatMessageRead
+          .create({
+            data: { messageId: msg.id, userId },
+          })
+          .catch(() => {}) // 중복 row 에러 무시
+      )
+    );
 
-    // 🔥 추가된 부분: unreadMessages의 id 목록을 받아 readCount = 0으로 일괄 업데이트
-    const unreadIds = unreadMessages.map(msg => msg.id);
+    // 🔥 unreadMessages의 id 목록을 받아 readCount = 0으로 일괄 업데이트
+    const unreadIds = unreadMessages.map((msg) => msg.id);
     if (unreadIds.length > 0) {
       await prisma.shareChatMessage.updateMany({
         where: { id: { in: unreadIds } },
@@ -60,9 +72,22 @@ io.on("connection", (socket) => {
       });
     }
 
-    // 읽음 처리된 메시지 id만 보내줌
+    // 읽음 처리된 메시지 id만 해당 방 모두에게 emit
     io.to(chatId).emit("messagesRead", { readIds: unreadIds });
     console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, unreadIds);
+
+    // ✅ 목록방에 있는 상대방에게 실시간 안읽음 개수 0으로 전파
+    const chat = await prisma.shareChat.findUnique({
+      where: { id: parseInt(chatId) },
+      include: { participants: true },
+    });
+    const other = chat.participants.find((p) => p.userId !== userId);
+    if (other) {
+      io.to("chatList:" + other.userId).emit("chatListUpdate", {
+        chatId: Number(chatId),
+        unreadCount: 0,
+      });
+    }
   });
 
   socket.on("chat message", async ({ chatId, senderId, content }) => {
@@ -77,32 +102,54 @@ io.on("connection", (socket) => {
       },
       include: {
         sender: true,
-      }
+      },
     });
 
     // 상대방이 방에 접속 중이면 바로 읽음 처리
     const socketsInRoom = await io.in(chatId).fetchSockets();
     // 내 socket을 제외한 다른 사람의 userId 찾기
     const otherUserId = socketsInRoom
-      .map(s => socketUserMap[s.id])
-      .find(id => id && id !== senderId);
+      .map((s) => socketUserMap[s.id])
+      .find((id) => id && id !== senderId);
 
     if (otherUserId) {
       // 읽음 row 생성 (중복 에러 무시)
-      await prisma.shareChatMessageRead.create({
-        data: { messageId: savedMessage.id, userId: otherUserId }
-      }).catch(() => {});
-
-      // 🔥 바로 DB readCount도 0으로 변경 (실시간 반영)
+      await prisma.shareChatMessageRead
+        .create({
+          data: { messageId: savedMessage.id, userId: otherUserId },
+        })
+        .catch(() => {});
+      // 바로 DB readCount도 0으로 변경 (실시간 반영)
       await prisma.shareChatMessage.update({
         where: { id: savedMessage.id },
-        data: { readCount: 0 }
+        data: { readCount: 0 },
       });
-      // (참고: savedMessage.readCount를 프론트로 바로 내려주려면 아래처럼 반영)
       savedMessage.readCount = 0;
     }
 
     io.to(chatId).emit("chat message", savedMessage);
+
+    // ✅ 목록방에 있는 상대방에게 실시간 안읽음 개수 전파
+    // (채팅방 참여자 중, 보낸 사람(senderId)이 아닌 대상)
+    const chat = await prisma.shareChat.findUnique({
+      where: { id: parseInt(chatId) },
+      include: { participants: true },
+    });
+    const other = chat.participants.find((p) => p.userId !== senderId);
+    if (other) {
+      // 상대방의 unreadCount(실제 개수)를 다시 조회
+      const unreadCount = await prisma.shareChatMessage.count({
+        where: {
+          shareChatId: parseInt(chatId),
+          senderId: { not: other.userId },
+          readCount: 1,
+        },
+      });
+      io.to("chatList:" + other.userId).emit("chatListUpdate", {
+        chatId: Number(chatId),
+        unreadCount,
+      });
+    }
   });
 
   // ====== 단체채팅 (groupBuy) ======
@@ -129,7 +176,7 @@ io.on("connection", (socket) => {
       },
       include: {
         sender: true,
-      }
+      },
     });
 
     // (추후 읽음 처리 확장 가능)
@@ -159,5 +206,5 @@ io.on("connection", (socket) => {
 
 // 서버 실행
 server.listen(PORT, () => {
-  console.log(`🚀 서버가 ${PORT}에서 실행 중`);
+  console.log(`🚀 서버가 http://localhost:${PORT}에서 실행 중`);
 });

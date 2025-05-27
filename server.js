@@ -81,7 +81,7 @@ io.on("connection", (socket) => {
 
     if (otherUserId) {
       // 읽음 row 생성 (중복 에러 무시)
-      await prisma.shareChatMessageRead.create({
+      await prisma.ShareChatMessageRead.create({
         data: { messageId: savedMessage.id, userId: otherUserId }
       }).catch(() => {});
     }

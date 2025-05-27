@@ -78,6 +78,7 @@ io.on("connection", (socket) => {
       io.to("chatList:" + other.userId).emit("chatListUpdate", {
         chatId: Number(chatId),
         unreadCount: 0,
+        type: "share", // 💚 추가!
       });
     }
   });
@@ -130,6 +131,7 @@ io.on("connection", (socket) => {
         unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
+        type: "share", // 💚 추가!
       });
     }
   });
@@ -173,6 +175,7 @@ io.on("connection", (socket) => {
         io.to("chatList:" + participant.userId).emit("chatListUpdate", {
           chatId: Number(chatId),
           unreadCount: 0,
+          type: "together", // 💙 추가!
         });
       }
     }
@@ -213,6 +216,7 @@ io.on("connection", (socket) => {
         unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
+        type: "together", // 💙 추가!
       });
     }
   });

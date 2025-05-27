@@ -78,7 +78,7 @@ io.on("connection", (socket) => {
       io.to("chatList:" + other.userId).emit("chatListUpdate", {
         chatId: Number(chatId),
         unreadCount: 0,
-        type: "share", // 💚 추가!
+        type: "share",
       });
     }
   });
@@ -131,7 +131,7 @@ io.on("connection", (socket) => {
         unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
-        type: "share", // 💚 추가!
+        type: "share",
       });
     }
   });
@@ -172,10 +172,11 @@ io.on("connection", (socket) => {
     });
     for (const participant of groupChat.participants) {
       if (participant.userId !== userId) {
-        io.to("chatList:" + participant.userId).emit("chatListUpdate", {
+        // 💙 반드시 groupBuyChatListUpdate로 emit!!
+        io.to("chatList:" + participant.userId).emit("groupBuyChatListUpdate", {
           chatId: Number(chatId),
           unreadCount: 0,
-          type: "together", // 💙 추가!
+          type: "together",
         });
       }
     }
@@ -211,12 +212,13 @@ io.on("connection", (socket) => {
           GroupBuyChatMessageRead: { none: { userId: participant.userId } },
         },
       });
-      io.to("chatList:" + participant.userId).emit("chatListUpdate", {
+      // 💙 반드시 groupBuyChatListUpdate로 emit!!
+      io.to("chatList:" + participant.userId).emit("groupBuyChatListUpdate", {
         chatId: Number(chatId),
         unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
-        type: "together", // 💙 추가!
+        type: "together",
       });
     }
   });

@@ -91,6 +91,7 @@ io.on("connection", (socket) => {
         senderId,
         shareChatId: parseInt(chatId),
         content,
+        count: initialCount,
       },
       include: { sender: true },
     });
@@ -110,7 +111,7 @@ io.on("connection", (socket) => {
       });
       savedMessage.readCount = 0;
     }
-    io.to(chatId).emit("chat message", savedMessage);
+    io.to(chatId).emit("groupbuy chat message", { ...savedMessage, count: initialCount });
 
     // 목록방에 있는 상대방에게 실시간 안읽음 개수, 마지막 메시지 등 전파
     const chat = await prisma.shareChat.findUnique({

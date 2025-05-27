@@ -20,34 +20,39 @@ const io = new Server(server, {
   }
 });
 
+// 소켓ID ↔ 유저ID 매핑 (in-memory, 재시작시 초기화됨)
+const socketUserMap = {};
+const userSocketMap = {};
+
 io.on("connection", (socket) => {
   console.log("📡 클라이언트 연결됨");
 
   // ====== 1:1 채팅 (share) ======
   socket.on("joinRoom", async ({ chatId, userId }) => {
     socket.join(chatId);
+    socketUserMap[socket.id] = userId;
+    userSocketMap[userId] = socket.id;
     console.log(`🟢 ${socket.id}가 1:1 방 ${chatId}에 입장 (유저: ${userId})`);
 
-    // 안읽은 메시지 readCount 0 처리
-    await prisma.shareChatMessage.updateMany({
+    // 내가 읽지 않은 메시지 조회
+    const unreadMessages = await prisma.shareChatMessage.findMany({
       where: {
         shareChatId: parseInt(chatId),
         senderId: { not: userId },
-        readCount: 1,
-      },
-      data: { readCount: 0 },
-    });
-
-    // 읽음 처리된 메시지 id만 보내줌
-    const readMessages = await prisma.shareChatMessage.findMany({
-      where: {
-        shareChatId: parseInt(chatId),
-        senderId: { not: userId },
-        readCount: 0,
+        shareChatMessageReads: { none: { userId } },
       },
       select: { id: true }
     });
-    const readIds = readMessages.map(msg => msg.id);
+
+    // 해당 메시지 읽음 row 생성
+    await Promise.all(unreadMessages.map(msg =>
+      prisma.shareChatMessageRead.create({
+        data: { messageId: msg.id, userId }
+      }).catch(() => {}) // 중복 row 에러 무시
+    ));
+
+    // 읽음 처리된 메시지 id만 보내줌
+    const readIds = unreadMessages.map(msg => msg.id);
     socket.emit("messagesRead", { readIds });
     console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, readIds);
   });
@@ -61,22 +66,24 @@ io.on("connection", (socket) => {
         senderId,
         shareChatId: parseInt(chatId),
         content,
-        readCount: 1, // 1: 안읽음
       },
       include: {
         sender: true,
       }
     });
 
-    // 현재 방에 나 말고 누가 접속중이면 바로 읽음처리
+    // 상대방이 방에 접속 중이면 바로 읽음 처리
     const socketsInRoom = await io.in(chatId).fetchSockets();
-    const isOtherUserInRoom = socketsInRoom.some(s => s.id !== socket.id);
-    if (isOtherUserInRoom) {
-      await prisma.shareChatMessage.update({
-        where: { id: savedMessage.id },
-        data: { readCount: 0 }
-      });
-      savedMessage.readCount = 0;
+    // 내 socket을 제외한 다른 사람의 userId 찾기
+    const otherUserId = socketsInRoom
+      .map(s => socketUserMap[s.id])
+      .find(id => id && id !== senderId);
+
+    if (otherUserId) {
+      // 읽음 row 생성 (중복 에러 무시)
+      await prisma.shareChatMessageRead.create({
+        data: { messageId: savedMessage.id, userId: otherUserId }
+      }).catch(() => {});
     }
 
     io.to(chatId).emit("chat message", savedMessage);
@@ -85,6 +92,8 @@ io.on("connection", (socket) => {
   // ====== 단체채팅 (groupBuy) ======
   socket.on("joinGroupRoom", async ({ chatId, userId }) => {
     socket.join(chatId);
+    socketUserMap[socket.id] = userId;
+    userSocketMap[userId] = socket.id;
     console.log(`🟢 ${socket.id}가 단체 방 ${chatId}에 입장 (유저: ${userId})`);
 
     // (단체 채팅 읽음처리, 추후 구현)
@@ -100,7 +109,7 @@ io.on("connection", (socket) => {
         senderId,
         groupBuyChatId: parseInt(chatId),
         content,
-        count: 1, // 읽음(추후)
+        count: 1, // 추후 제거 예정
       },
       include: {
         sender: true,
@@ -114,7 +123,21 @@ io.on("connection", (socket) => {
   // ====== 공통: 퇴장 ======
   socket.on("leaveRoom", (chatId) => {
     socket.leave(chatId);
+    const userId = socketUserMap[socket.id];
+    if (userId) {
+      delete userSocketMap[userId];
+      delete socketUserMap[socket.id];
+    }
     console.log(`🔴 ${socket.id}가 방 ${chatId}에서 퇴장`);
+  });
+
+  socket.on("disconnect", () => {
+    const userId = socketUserMap[socket.id];
+    if (userId) {
+      delete userSocketMap[userId];
+      delete socketUserMap[socket.id];
+    }
+    console.log(`🔌 ${socket.id} 연결 해제`);
   });
 });
 

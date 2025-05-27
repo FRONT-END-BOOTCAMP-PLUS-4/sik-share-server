@@ -27,12 +27,16 @@ const userSocketMap = {};
 io.on("connection", (socket) => {
   console.log("📡 클라이언트 연결됨");
 
-  // ✅ 1. 채팅 목록 구독 (채팅 목록 페이지에서)
+  // ✅ 1. 채팅 목록 구독
   socket.on("subscribeChatList", ({ userId }) => {
     socket.join("chatList:" + userId);
     socketUserMap[socket.id] = userId;
     userSocketMap[userId] = socket.id;
     console.log(`🟢 ${socket.id}가 chatList:${userId} 구독`);
+  });
+  // (선택) 구독 해제
+  socket.on("unsubscribeChatList", ({ userId }) => {
+    socket.leave("chatList:" + userId);
   });
 
   // ====== 1:1 채팅 (share) ======
@@ -129,8 +133,7 @@ io.on("connection", (socket) => {
 
     io.to(chatId).emit("chat message", savedMessage);
 
-    // ✅ 목록방에 있는 상대방에게 실시간 안읽음 개수 전파
-    // (채팅방 참여자 중, 보낸 사람(senderId)이 아닌 대상)
+    // ✅ 목록방에 있는 상대방에게 실시간 안읽음 개수, 마지막 메시지 등 전파
     const chat = await prisma.shareChat.findUnique({
       where: { id: parseInt(chatId) },
       include: { participants: true },
@@ -145,9 +148,9 @@ io.on("connection", (socket) => {
           readCount: 1,
         },
       });
-      io.to("chatList:" + otherUserId).emit("chatListUpdate", {
+      io.to("chatList:" + other.userId).emit("chatListUpdate", {
         chatId: Number(chatId),
-        unreadCount: 1,
+        unreadCount,
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
       });
@@ -160,9 +163,7 @@ io.on("connection", (socket) => {
     socketUserMap[socket.id] = userId;
     userSocketMap[userId] = socket.id;
     console.log(`🟢 ${socket.id}가 단체 방 ${chatId}에 입장 (유저: ${userId})`);
-
     // (단체 채팅 읽음처리, 추후 구현)
-    // 현재는 기본 메시지 저장만 구현
   });
 
   socket.on("groupbuy chat message", async ({ chatId, senderId, content }) => {
@@ -174,7 +175,7 @@ io.on("connection", (socket) => {
         senderId,
         groupBuyChatId: parseInt(chatId),
         content,
-        count: 1, // 추후 제거 예정
+        count: 1,
       },
       include: {
         sender: true,
@@ -206,7 +207,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// 서버 실행
 server.listen(PORT, () => {
   console.log(`🚀 서버가 http://localhost:${PORT}에서 실행 중`);
 });

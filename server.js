@@ -42,7 +42,7 @@ io.on("connection", (socket) => {
     socket.join(chatId);
     socketUserMap[socket.id] = userId;
     userSocketMap[userId] = socket.id;
-    console.log(`🟢 ${socket.id}가 1:1 방 ${chatId}에 입장 (유저: ${userId})`);
+    console.log(🟢 ${socket.id}가 1:1 방 ${chatId}에 입장 (유저: ${userId}));
 
     const unreadMessages = await prisma.shareChatMessage.findMany({
       where: {
@@ -67,7 +67,7 @@ io.on("connection", (socket) => {
       });
     }
     io.to(chatId).emit("messagesRead", { readIds: unreadIds });
-    console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, unreadIds);
+    console.log([joinRoom] 읽음처리된 메시지 IDs:, unreadIds);
 
     const chat = await prisma.shareChat.findUnique({
       where: { id: parseInt(chatId) },
@@ -78,13 +78,12 @@ io.on("connection", (socket) => {
       io.to("chatList:" + other.userId).emit("chatListUpdate", {
         chatId: Number(chatId),
         unreadCount: 0,
-        type: "share",
       });
     }
   });
 
   socket.on("chat message", async ({ chatId, senderId, content }) => {
-    console.log(`✉️ [1:1] 방 ${chatId} 메시지: ${content}`);
+    console.log(✉️ [1:1] 방 ${chatId} 메시지: ${content});
 
     let savedMessage = await prisma.shareChatMessage.create({
       data: {
@@ -110,8 +109,8 @@ io.on("connection", (socket) => {
       });
       savedMessage.readCount = 0;
     }
-    io.to(chatId).emit("groupbuy chat message", { savedMessage });
-
+    io.to(chatId).emit("chat message", savedMessage);
+    
     // 목록방에 있는 상대방에게 실시간 안읽음 개수, 마지막 메시지 등 전파
     const chat = await prisma.shareChat.findUnique({
       where: { id: parseInt(chatId) },

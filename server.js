@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
     }
 
     // 읽음 처리된 메시지 id만 보내줌
-    socket.emit("messagesRead", { readIds: unreadIds });
+    io.to(chatId).emit("messagesRead", { readIds: unreadIds });
     console.log(`[joinRoom] 읽음처리된 메시지 IDs:`, unreadIds);
   });
 

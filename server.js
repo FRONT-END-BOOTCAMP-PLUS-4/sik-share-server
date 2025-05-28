@@ -226,7 +226,7 @@ io.on("connection", (socket) => {
         lastMessage: savedMessage.content,
         lastMessageAt: savedMessage.createdAt,
         type: "together",
-        count: initialCount, // 💙 프론트에서 쓸 경우 count도 전달
+        count: initialCount,
       });
     }
   });
@@ -250,6 +250,41 @@ io.on("connection", (socket) => {
     }
     console.log(`🔌 ${socket.id} 연결 해제`);
   });
+});
+
+// 후기 메세지 만들기용
+app.post("/api/share-complete-message", async (req, res) => {
+  try {
+    const { chatId } = req.body;
+    if (!chatId) return res.status(400).json({ message: "chatId required" });
+
+    // 시스템 메시지 DB 저장
+    const systemMessage = await prisma.shareChatMessage.create({
+      data: {
+        senderId: "system",
+        shareChatId: parseInt(chatId),
+        content: "나눔완료, 후기 텍스트 생성",
+      },
+    });
+
+    console.log("후기 systemMessage DB 저장 완료:", systemMessage);
+
+    // 채팅방에 실시간 emit
+    io.to(chatId).emit("chat message", {
+      ...systemMessage,
+      sender: {
+        senderId: "system",
+        shareChatId: parseInt(chatId),
+      },
+    });
+
+    console.log("후기 systemMessage emit 완료:", chatId);
+
+    res.json({ message: "ok", data: systemMessage });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "error", detail: e.message });
+  }
 });
 
 server.listen(PORT, () => {

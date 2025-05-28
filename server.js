@@ -263,7 +263,7 @@ app.post("/api/share-complete-message", async (req, res) => {
       data: {
         senderId: "system",
         shareChatId: parseInt(chatId),
-        content: "나눔완료, 후기 텍스트 생성",
+        content: "나눔이 완료되었다면, 후기 작성 어때요?",
       },
     });
 
